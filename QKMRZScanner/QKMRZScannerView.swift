@@ -32,7 +32,7 @@ public class QKMRZScannerView: UIView {
     public weak var delegate: QKMRZScannerViewDelegate?
     
     // add show or hide rectangle and press button to scan option
-    public var isOverlayRect: Bool = true
+    public var isHideOverlayRect: Bool = false
     public var isScan: Bool = false
     
     public var cutoutRect: CGRect {
@@ -177,7 +177,7 @@ public class QKMRZScannerView: UIView {
         ])
         
         // hide rect view overlay camera preview
-        cutoutView.isHidden = !isOverlayRect
+        cutoutView.isHidden = !isHideOverlayRect
     }
     
     fileprivate func initCaptureSession() {
