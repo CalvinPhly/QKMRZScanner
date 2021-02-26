@@ -13,6 +13,7 @@ import AudioToolbox
 import Vision
 
 public protocol QKMRZScannerViewDelegate: class {
+    func mrzScanError(_ mrzScannerView: QKMRZScannerView, didFind errorResult: String)
     func mrzScannerView(_ mrzScannerView: QKMRZScannerView, didFind scanResult: QKMRZScanResult)
 }
 
@@ -29,6 +30,10 @@ public class QKMRZScannerView: UIView {
     @objc public dynamic var isScanning = false
     public var vibrateOnResult = true
     public weak var delegate: QKMRZScannerViewDelegate?
+    
+    // add show or hide rectangle and press button to scan option
+    public var isOverlayRect: Bool = true
+    public var isScan: Bool = false
     
     public var cutoutRect: CGRect {
         return cutoutView.cutoutRect
@@ -170,6 +175,9 @@ public class QKMRZScannerView: UIView {
             cutoutView.leftAnchor.constraint(equalTo: leftAnchor),
             cutoutView.rightAnchor.constraint(equalTo: rightAnchor)
         ])
+        
+        // hide rect view overlay camera preview
+        cutoutView.isHidden = !isOverlayRect
     }
     
     fileprivate func initCaptureSession() {
@@ -242,6 +250,25 @@ public class QKMRZScannerView: UIView {
         
         return CIContext.shared.createCGImage(inputImage, from: inputImage.extent)!
     }
+    
+    fileprivate func handleScanResult(_ mrzTextImage: CGImage, _ cgImage: CGImage) {
+
+        if let mrzResult = self.mrz(from: mrzTextImage), mrzResult.allCheckDigitsValid {
+            DispatchQueue.main.async {
+                let enlargedDocumentImage = self.enlargedDocumentImage(from: cgImage)
+                let scanResult = QKMRZScanResult(mrzResult: mrzResult, documentImage: enlargedDocumentImage)
+                self.delegate?.mrzScannerView(self, didFind: scanResult)
+                if self.vibrateOnResult {
+                    AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+                }
+            
+            }
+        } else {
+            DispatchQueue.main.async {
+                self.delegate?.mrzScanError(self, didFind: "Could not extract information.")
+            }
+        }
+    }
 }
 
 // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
@@ -273,17 +300,14 @@ extension QKMRZScannerView: AVCaptureVideoDataOutputSampleBufferDelegate {
                 return
             }
             
-            if let mrzTextImage = documentImage.cropping(to: mrzRegionRect) {
-                if let mrzResult = self.mrz(from: mrzTextImage), mrzResult.allCheckDigitsValid {
-                    self.stopScanning()
-                    
+            if isScan {
+                isScan = !isScan
+                self.stopScanning()
+                if let mrzTextImage = documentImage.cropping(to: mrzRegionRect) {
+                    handleScanResult(mrzTextImage, cgImage)
+                } else {
                     DispatchQueue.main.async {
-                        let enlargedDocumentImage = self.enlargedDocumentImage(from: cgImage)
-                        let scanResult = QKMRZScanResult(mrzResult: mrzResult, documentImage: enlargedDocumentImage)
-                        self.delegate?.mrzScannerView(self, didFind: scanResult)
-                        if self.vibrateOnResult {
-                            AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
-                        }
+                        self.delegate?.mrzScanError(self, didFind: "Could not extract information.")
                     }
                 }
             }
