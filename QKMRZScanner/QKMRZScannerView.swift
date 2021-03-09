@@ -14,6 +14,7 @@ import Vision
 
 public protocol QKMRZScannerViewDelegate: class {
     func mrzScanError(_ mrzScannerView: QKMRZScannerView, didFind errorResult: String)
+    func mrzCaptureview(_ mrzScannerView: QKMRZScannerView, didFind captureResult: UIImage)
     func mrzScannerView(_ mrzScannerView: QKMRZScannerView, didFind scanResult: QKMRZScanResult)
 }
 
@@ -254,6 +255,11 @@ public class QKMRZScannerView: UIView {
     fileprivate func handleScanResult(_ mrzTextImage: CGImage, _ cgImage: CGImage) {
 
         if let mrzResult = self.mrz(from: mrzTextImage), mrzResult.allCheckDigitsValid {
+            
+            if !isScan {
+                stopScanning()
+            }
+            
             DispatchQueue.main.async {
                 let enlargedDocumentImage = self.enlargedDocumentImage(from: cgImage)
                 let scanResult = QKMRZScanResult(mrzResult: mrzResult, documentImage: enlargedDocumentImage)
@@ -262,10 +268,6 @@ public class QKMRZScannerView: UIView {
                     AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
                 }
             
-            }
-        } else {
-            DispatchQueue.main.async {
-                self.delegate?.mrzScanError(self, didFind: "Could not extract information.")
             }
         }
     }
@@ -302,7 +304,7 @@ extension QKMRZScannerView: AVCaptureVideoDataOutputSampleBufferDelegate {
             
             if isScan {
                 isScan = !isScan
-                self.stopScanning()
+                stopScanning()
                 if let mrzTextImage = documentImage.cropping(to: mrzRegionRect) {
                     handleScanResult(mrzTextImage, cgImage)
                 } else {
@@ -310,7 +312,15 @@ extension QKMRZScannerView: AVCaptureVideoDataOutputSampleBufferDelegate {
                         self.delegate?.mrzScanError(self, didFind: "Could not extract information.")
                     }
                 }
+            } else {
+                if let mrzTextImage = documentImage.cropping(to: mrzRegionRect) {
+                    handleScanResult(mrzTextImage, cgImage)
+                }
             }
+            
+            let captureImage = self.enlargedDocumentImage(from: cgImage)
+            self.delegate?.mrzCaptureview(self, didFind: captureImage)
+            
         }
         
         try? imageRequestHandler.perform([detectTextRectangles])
